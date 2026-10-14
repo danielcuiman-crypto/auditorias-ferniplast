@@ -124,11 +124,23 @@ finish=async function(){
   if(!await syncCurrent(false)){r.status='draft';save();return}
   detail=r.id;go('detail');alert('Auditoría finalizada y guardada en Cloudflare D1.');
 };
-deleteRecord=function(id){
-  let r=records.find(x=>x.id===String(id));
-  if(r?.remote){alert('Para proteger los datos, no está habilitado eliminar auditorías guardadas en D1.');return}
-  if(!confirm('¿Eliminar este borrador local?'))return;
-  records=records.filter(x=>x.id!==String(id));save();render();
+deleteRecord=async function(id){
+  const r=records.find(x=>x.id===String(id));
+  if(!r)return;
+  if(!r.remote){
+    if(!confirm('¿Eliminar este borrador local?'))return;
+    records=records.filter(x=>x.id!==String(id));save();render();return;
+  }
+  if(!await authorizeReport())return;
+  if(!confirm(`¿Eliminar DEFINITIVAMENTE la auditoría de ${r.branch} del ${r.date}?\nSe borrarán sus respuestas, pendientes y fotos guardadas en D1. Esta acción no se puede deshacer.`))return;
+  try{
+    await api('/auditorias/'+encodeURIComponent(id),{method:'DELETE'});
+    records=records.filter(x=>x.id!==String(id));
+    if(current===String(id))current=null;
+    if(detail===String(id))detail=null;
+    save();render();
+    alert('Auditoría eliminada de Cloudflare D1.');
+  }catch(e){alert('No se pudo eliminar la auditoría: '+e.message)}
 };
 // Validate token before showing locally cached audit data.
 (async()=>{try{await refreshRemote();render()}catch(e){console.warn('No se pudo cargar D1:',e);render();alert('No se pudo conectar con Cloudflare D1. Los datos locales siguen disponibles.')}})();
